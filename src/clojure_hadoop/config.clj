@@ -28,6 +28,8 @@
 (imp/import-mapreduce-lib)
 (imp/import-filecache)
 
+(defn ensure-class [value] (if (string? value) (Class/forName value) value))
+
 (def combine-cleanup
   "The name of the property that stores the cleanup function name of
   the combiner."
@@ -64,7 +66,7 @@
         (fn? s) (throw (Exception. "Cannot use function as value; use a symbol."))
         :else (str s)))
 
-(defn ^Configuration configuration 
+(defn ^Configuration configuration
   "Returns the configuration for the job."
   [^Job job] (.getConfiguration job))
 
@@ -75,9 +77,9 @@
   (fn [job key value]
     (or (and (commandline-job-conf-param? key) :X)
         key)))
-  
+
 ;; allow users to specify parameters via the commandline
-;; to set in the job's configuration  
+;; to set in the job's configuration
 ;; e.g. -Xmy.foo.value myfoovalue
 ;; would yield
 ;; (.set (configuration job) "my.foo.value" "myfoovalue")
@@ -132,14 +134,14 @@
 (defmethod conf :map [^Job job key value]
   (let [value (as-str value)]
     (cond
-     (= "identity" value)
-     (.setMapperClass job Mapper)
+      (= "identity" (name value))
+      (.setMapperClass job Mapper)
 
-     (.contains value "/")
-     (.set (configuration job) "clojure-hadoop.job.map" value)
+      (.contains value "/")
+      (.set (configuration job) "clojure-hadoop.job.map" value)
 
-     :else
-     (.setMapperClass job (Class/forName value)))))
+      :else
+      (.setMapperClass job (ensure-class value)))))
 
 ;; The name of the mapper cleanup function as namespace/symbol.
 (defmethod conf :map-cleanup [^Job job key value]
@@ -159,17 +161,17 @@
 (defmethod conf :reduce [^Job job key value]
   (let [value (as-str value)]
     (cond
-     (= "identity" value)
-     (.setReducerClass job Reducer)
+      (= "identity" (name value))
+      (.setReducerClass job Reducer)
 
-     (= "none" value)
-     (.setNumReduceTasks job 0)
+      (= "none" (name value))
+      (.setNumReduceTasks job 0)
 
-     (.contains value "/")
-     (.set (configuration job) "clojure-hadoop.job.reduce" value)
+      (.contains value "/")
+      (.set (configuration job) "clojure-hadoop.job.reduce" value)
 
-     :else
-     (.setReducerClass job (Class/forName value)))))
+      :else
+      (.setReducerClass job (ensure-class value)))))
 
 ;; The name of the reducer cleanup function as namespace/symbol.
 (defmethod conf :reduce-cleanup [^Job job key value]
@@ -184,12 +186,13 @@
       (.set (configuration job) reduce-setup value))))
 
 (defmethod conf :reduce-tasks [^Job job key value]
-  (if (integer? value)
-    (.setNumReduceTasks job value)
-    (try
-      (.setNumReduceTasks job (Integer/parseInt (str/trim value)))
-      (catch NumberFormatException _
-        (throw (IllegalArgumentException. "The reduce-tasks option must be an integer."))))))
+  (when value
+    (if (integer? value)
+      (.setNumReduceTasks job value)
+      (try
+        (.setNumReduceTasks job (Integer/parseInt (str/trim value)))
+        (catch NumberFormatException _
+          (throw (IllegalArgumentException. "The reduce-tasks option must be an integer.")))))))
 
 (defmethod conf :combine [^Job job key value]
   (let [value (as-str value)]
@@ -200,7 +203,7 @@
        (.set (configuration job) "clojure-hadoop.job.combine" value))
 
      :else
-     (.setCombinerClass job (Class/forName value)))))
+     (.setCombinerClass job (ensure-class value)))))
 
 ;; The name of the combiner cleanup function as namespace/symbol.
 (defmethod conf :combine-cleanup [^Job job key value]
@@ -229,20 +232,20 @@
 ;; The mapper output key class; used when the mapper writer outputs
 ;; types different from the job output.
 (defmethod conf :map-output-key [^Job job key value]
-  (.setMapOutputKeyClass job (Class/forName value)))
+  (.setMapOutputKeyClass job (ensure-class value)))
 
 ;; The mapper output value class; used when the mapper writer outputs
 ;; types different from the job output.
 (defmethod conf :map-output-value [^Job job key value]
-  (.setMapOutputValueClass job (Class/forName value)))
+  (.setMapOutputValueClass job (ensure-class value)))
 
 ;; The job output key class.
 (defmethod conf :output-key [^Job job key value]
-  (.setOutputKeyClass job (Class/forName value)))
+  (.setOutputKeyClass job (ensure-class value)))
 
 ;; The job output value class.
 (defmethod conf :output-value [^Job job key value]
-  (.setOutputValueClass job (Class/forName value)))
+  (.setOutputValueClass job (ensure-class value)))
 
 ;; The reducer reader function, converts Hadoop Writable types to
 ;; native Clojure types.
@@ -262,38 +265,38 @@
 (defmethod conf :input-format [^Job job key value]
   (let [val (as-str value)]
     (cond
-     (= "text" val)
-     (.setInputFormatClass job TextInputFormat)
+      (= "text" (name val))
+      (.setInputFormatClass job TextInputFormat)
 
-     (= "seq" val)
-     (.setInputFormatClass job SequenceFileInputFormat)
+      (= "seq" (name val))
+      (.setInputFormatClass job SequenceFileInputFormat)
 
-     :else
-     (.setInputFormatClass job (Class/forName value)))))
+      :else
+      (.setInputFormatClass job (ensure-class value)))))
 
 ;; The output file format.  May be a class name or "text" for
 ;; TextOutputFormat, "seq" for SequenceFileOutputFormat.
 (defmethod conf :output-format [^Job job key value]
   (let [val (as-str value)]
     (cond
-     (= "text" val)
-     (.setOutputFormatClass job TextOutputFormat)
+      (= "text" (name val))
+      (.setOutputFormatClass job TextOutputFormat)
 
-     (= "seq" val)
-     (.setOutputFormatClass job SequenceFileOutputFormat)
+      (= "seq" (name val))
+      (.setOutputFormatClass job SequenceFileOutputFormat)
 
-     :else
-     (.setOutputFormatClass job (Class/forName value)))))
+      :else
+      (.setOutputFormatClass job (ensure-class value)))))
 
 ;; If true, compress job output files.
 (defmethod conf :compress-output [^Job job key value]
   (let [val (.toLowerCase (as-str value))]
     (cond
-     (= "true" val)
-     (FileOutputFormat/setCompressOutput job true)
+      (= "true" (name val))
+      (FileOutputFormat/setCompressOutput job true)
 
-     (= "false" val)
-     (FileOutputFormat/setCompressOutput job false)
+      (= "false" (name val))
+      (FileOutputFormat/setCompressOutput job false)
 
      :else
      (throw (Exception. (str "compress-output value must be true or false, but given '" val "'"))))))
@@ -302,33 +305,33 @@
 (defmethod conf :output-compressor [^Job job key value]
   (let [val (as-str value)]
     (cond
-     (= "default" val)
-     (FileOutputFormat/setOutputCompressorClass job DefaultCodec)
+      (= "default" (name val))
+      (FileOutputFormat/setOutputCompressorClass job DefaultCodec)
 
-     (= "gzip" val)
-     (FileOutputFormat/setOutputCompressorClass job GzipCodec)
+      (= "gzip" (name val))
+      (FileOutputFormat/setOutputCompressorClass job GzipCodec)
 
-     (= "bzip2" val)
-     (FileOutputFormat/setOutputCompressorClass job BZip2Codec)
+      (= "bzip2" (name val))
+      (FileOutputFormat/setOutputCompressorClass job BZip2Codec)
 
-     :else
-     (FileOutputFormat/setOutputCompressorClass job (Class/forName value)))))
+      :else
+      (FileOutputFormat/setOutputCompressorClass job (ensure-class value)))))
 
 ;; Type of compression to use for sequence files.
 (defmethod conf :compression-type [^Job job key value]
   (let [val (as-str value)]
     (cond
-     (= "block" val)
-     (SequenceFileOutputFormat/setOutputCompressionType
-      job SequenceFile$CompressionType/BLOCK)
+      (= "block" (name val))
+      (SequenceFileOutputFormat/setOutputCompressionType
+       job SequenceFile$CompressionType/BLOCK)
 
-     (= "none" val)
-     (SequenceFileOutputFormat/setOutputCompressionType
-      job SequenceFile$CompressionType/NONE)
+      (= "none" (name val))
+      (SequenceFileOutputFormat/setOutputCompressionType
+       job SequenceFile$CompressionType/NONE)
 
-     (= "record" val)
-     (SequenceFileOutputFormat/setOutputCompressionType
-      job SequenceFile$CompressionType/RECORD))))
+      (= "record" (name val))
+      (SequenceFileOutputFormat/setOutputCompressionType
+       job SequenceFile$CompressionType/RECORD))))
 
 (defmethod conf :add-cache-archive [^Job job key value]
   (doseq [archive-path-string (sequentialify (load/load-or-value value))]
@@ -343,9 +346,9 @@
 
 (defmethod conf :batch [^Job job key value]
   (let [val (as-str value)]
-    (cond (= val "true")
+    (cond (= (name val) "true")
           (.set (configuration job) "clojure-hadoop.job.batch" "true")
-          (= val "false")
+          (= (name val) "false")
           (.set (configuration job) "clojure-hadoop.job.batch" "false"))))
 
 (defn- to-keyword [^String k]
